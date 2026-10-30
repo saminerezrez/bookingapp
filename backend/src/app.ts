@@ -1,6 +1,8 @@
 import fastify from "fastify";
 import type { FastifyError } from "fastify";
+import cors from "@fastify/cors";
 import routes from "./http/routes";
+import { config } from "./config";
 
 export function buildApp() {
   const httpServer = fastify({
@@ -18,6 +20,10 @@ export function buildApp() {
         code: error.code ?? "INTERNAL_ERROR",
       },
     });
+  });
+
+  httpServer.register(cors, {
+    origin: config.corsOrigin,
   });
 
   httpServer.register(routes);

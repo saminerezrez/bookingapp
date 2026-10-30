@@ -63,3 +63,23 @@ describe("Booking API", () => {
     await app.close();
   });
 });
+
+describe("CORS", () => {
+  test("allows configured frontend origin", async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/version",
+      headers: {
+        origin: "http://localhost:5173",
+      },
+    });
+
+    expect(response.headers["access-control-allow-origin"]).toBe(
+      "http://localhost:5173",
+    );
+
+    await app.close();
+  });
+});

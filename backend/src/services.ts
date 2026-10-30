@@ -1,4 +1,8 @@
-import type { BookingRow, CreateBookingInput } from "./repository/types";
+import type {
+  BookingRow,
+  CreateBookingInput,
+  BookingListItem,
+} from "./repository/types";
 import * as repository from "./repository";
 
 const bookingTimes = [
@@ -12,7 +16,7 @@ const bookingTimes = [
   "16:00",
 ];
 
-export async function getBookings(): Promise<BookingRow[]> {
+export async function getBookings(): Promise<BookingListItem[]> {
   return await repository.getBookings();
 }
 

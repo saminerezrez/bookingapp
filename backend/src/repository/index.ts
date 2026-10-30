@@ -1,14 +1,14 @@
 import { sql } from "bun";
-import type { BookingRow, CreateBookingInput } from "./types";
+import type { BookingRow, CreateBookingInput, BookingListItem } from "./types";
 
-export async function getBookings(): Promise<BookingRow[]> {
+export async function getBookings(): Promise<BookingListItem[]> {
   const rows = await sql`
-    SELECT *
+    SELECT id, date, start_time, created_at
     FROM bookings
     ORDER BY date, start_time
   `;
 
-  return rows as BookingRow[];
+  return rows as BookingListItem[];
 }
 
 export async function createBooking(

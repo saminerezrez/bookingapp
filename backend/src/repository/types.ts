@@ -11,3 +11,10 @@ export type CreateBookingInput = {
   date: string;
   start_time: string;
 };
+
+export type BookingListItem = {
+  id: string;
+  date: string;
+  start_time: string;
+  created_at: Date;
+};
