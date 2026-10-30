@@ -9,6 +9,18 @@ async function routes(httpServer: FastifyInstance) {
   });
 
   httpServer.route({
+    method: "POST",
+    url: "/bookings",
+    handler: controllers.createBooking,
+  });
+
+  httpServer.route({
+    method: "GET",
+    url: "/available-slots",
+    handler: controllers.getAvailableSlots,
+  });
+
+  httpServer.route({
     method: "GET",
     url: "/health/ready",
     handler: controllers.healthReady,
