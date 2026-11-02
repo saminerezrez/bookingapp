@@ -1,17 +1,38 @@
 const API_URL = import.meta.env.VITE_API_URL;
 
-export async function getAvailableSlots(date: string) {
-  const response = await fetch(
-    `${API_URL}/available-slots?date=${encodeURIComponent(date)}`,
-  );
+export type Slot = {
+  startTime: string;
+  available: boolean;
+};
 
-  if (!response.ok) {
-    throw new Error("Could not load available slots");
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  let response: Response;
+
+  try {
+    response = await fetch(`${API_URL}${path}`, init);
+  } catch {
+    throw new Error("Could not reach the server. Please try again.");
   }
 
-  const data = await response.json();
+  if (response.ok) {
+    return (await response.json()) as T;
+  }
 
-  return data.slots as string[];
+  if (response.status === 409) {
+    throw new Error("That time was just booked. Please choose another time.");
+  }
+
+  const body = await response.json().catch(() => null);
+
+  throw new Error(body?.error?.message ?? "Something went wrong. Please try again.");
+}
+
+export async function getAvailableSlots(date: string) {
+  const data = await request<{ slots: Slot[] }>(
+    `/available-slots?date=${encodeURIComponent(date)}`,
+  );
+
+  return data.slots;
 }
 
 export async function createBooking(
@@ -19,7 +40,7 @@ export async function createBooking(
   date: string,
   startTime: string,
 ) {
-  const response = await fetch(`${API_URL}/bookings`, {
+  return await request("/bookings", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -27,13 +48,7 @@ export async function createBooking(
     body: JSON.stringify({
       name,
       date,
-      start_time: startTime,
+      startTime,
     }),
   });
-
-  if (!response.ok) {
-    throw new Error("Could not create booking");
-  }
-
-  return await response.json();
 }

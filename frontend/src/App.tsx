@@ -1,43 +1,71 @@
 import { useEffect, useState } from "react";
 import { createBooking, getAvailableSlots } from "./api";
+import type { Slot } from "./api";
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Something went wrong";
+}
 
 function App() {
   const [name, setName] = useState("");
   const [date, setDate] = useState("");
-  const [slots, setSlots] = useState<string[]>([]);
+  const [slots, setSlots] = useState<Slot[]>([]);
   const [startTime, setStartTime] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
+  const freeSlots = slots.filter((slot) => slot.available);
+
   useEffect(() => {
     if (!date) {
-      setSlots([]);
       return;
     }
+
+    // Ignores the answer if another date was picked while this one was loading.
+    let ignore = false;
 
     async function loadSlots() {
       setLoading(true);
       setError("");
-      setStartTime("");
 
       try {
-        const availableSlots = await getAvailableSlots(date);
-        setSlots(availableSlots);
-      } catch {
-        setError("Could not load available slots");
+        const daySlots = await getAvailableSlots(date);
+
+        if (!ignore) {
+          setSlots(daySlots);
+        }
+      } catch (error) {
+        if (!ignore) {
+          setError(errorMessage(error));
+        }
       } finally {
-        setLoading(false);
+        if (!ignore) {
+          setLoading(false);
+        }
       }
     }
 
     loadSlots();
+
+    return () => {
+      ignore = true;
+    };
   }, [date]);
+
+  function handleDateChange(value: string) {
+    setDate(value);
+    setSlots([]);
+    setStartTime("");
+    setLoading(false);
+    setError("");
+    setMessage("");
+  }
 
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
 
-    if (!name || !date || !startTime) {
+    if (!name.trim() || !date || !startTime) {
       setError("Please fill in all fields");
       return;
     }
@@ -49,14 +77,18 @@ function App() {
     try {
       await createBooking(name, date, startTime);
 
-      setMessage("Booking created");
+      setMessage(`Booked ${date} at ${startTime}`);
       setName("");
-      setStartTime("");
+    } catch (error) {
+      setError(errorMessage(error));
+    }
 
-      const availableSlots = await getAvailableSlots(date);
-      setSlots(availableSlots);
+    // Refreshed after a failed booking too, so a slot someone else took disappears.
+    try {
+      setStartTime("");
+      setSlots(await getAvailableSlots(date));
     } catch {
-      setError("Could not create booking");
+      setSlots([]);
     } finally {
       setLoading(false);
     }
@@ -68,36 +100,40 @@ function App() {
 
       <form onSubmit={handleSubmit}>
         <div>
-          <label>Name</label>
+          <label htmlFor="name">Name</label>
           <input
+            id="name"
             type="text"
+            maxLength={100}
             value={name}
             onChange={(event) => setName(event.target.value)}
           />
         </div>
 
         <div>
-          <label>Date</label>
+          <label htmlFor="date">Date</label>
           <input
+            id="date"
             type="date"
             value={date}
-            onChange={(event) => setDate(event.target.value)}
+            onChange={(event) => handleDateChange(event.target.value)}
           />
         </div>
 
         <div>
-          <label>Available time</label>
+          <label htmlFor="time">Available time</label>
 
           <select
+            id="time"
             value={startTime}
             onChange={(event) => setStartTime(event.target.value)}
             disabled={!date || loading}
           >
             <option value="">Choose a time</option>
 
-            {slots.map((slot) => (
-              <option key={slot} value={slot}>
-                {slot}
+            {freeSlots.map((slot) => (
+              <option key={slot.startTime} value={slot.startTime}>
+                {slot.startTime}
               </option>
             ))}
           </select>
@@ -108,8 +144,11 @@ function App() {
         </button>
       </form>
 
-      {error && <p>{error}</p>}
-      {message && <p>{message}</p>}
+      {date && !loading && !error && freeSlots.length === 0 && (
+        <p>No free times on this date.</p>
+      )}
+      {error && <p role="alert">{error}</p>}
+      {message && <p role="status">{message}</p>}
     </main>
   );
 }

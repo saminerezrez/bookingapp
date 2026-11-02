@@ -8,6 +8,9 @@ RUN bun install --frozen-lockfile --production
 
 COPY src ./src
 
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION
+
 USER bun
 
 EXPOSE 3000

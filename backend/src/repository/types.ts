@@ -1,20 +1,16 @@
-export type BookingRow = {
-  id: string;
-  name: string;
-  date: string;
-  start_time: string;
-  created_at: Date;
-};
-
 export type CreateBookingInput = {
   name: string;
   date: string;
-  start_time: string;
+  startTime: string;
 };
 
-export type BookingListItem = {
+export type Booking = CreateBookingInput & {
   id: string;
-  date: string;
-  start_time: string;
-  created_at: Date;
+};
+
+export type BookingListItem = Omit<Booking, "name">;
+
+export type Slot = {
+  startTime: string;
+  available: boolean;
 };
