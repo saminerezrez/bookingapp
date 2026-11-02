@@ -19,7 +19,7 @@ Target grade: **VG**. Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 | # | Date | Task | Depends on | Done when | Status |
 |---|---|---|---|---|---|
-| G1 | 28/10 | **Agree on the docs.** Both read and approve ROADMAP + ARCHITECTURE, then merge | – | PR merged with both approvals | ⬜ |
+| G1 | 28/10 | **Agree on the docs.** Both read and approve ROADMAP + ARCHITECTURE, then merge | – | PR merged with both approvals | ✅ |
 | G2 | 28/10 | **Decisions.** Confirm the booking rules (ARCH §1) and email the teacher the questions (below) | – | Rules confirmed in ARCH §1, email sent | ⬜ |
 | G3 | 28/10 | **Buy infrastructure.** Domain, VPS (≥4 vCPU, ≥8 GB RAM, Ubuntu 24.04), S3 bucket (EU region, private, 14-day lifecycle rule). DNS A records for `<domain>`, `api.`, `cdn.`, `grafana.` → VPS IP | – | `dig api.<domain>` returns the VPS IP, and the bucket exists | ⬜ |
 | G4 | 29/10 | **Merge the backend.** Fold the `unique (date, start_time)` constraint and the name check into the first migration (ARCH §5), then merge `feature/booking-database` | G1 | On `main`, `dbmate up` creates the table, and inserting the same slot twice fails | ✅ |
