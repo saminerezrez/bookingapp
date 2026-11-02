@@ -154,6 +154,8 @@ Base URL: `https://api.<domain>`. JSON in and out. Errors always use this shape:
 { "error": { "code": "SLOT_TAKEN", "message": "Slot is already booked" } }
 ```
 
+Unexpected errors (5xx) always return `INTERNAL_ERROR` with a fixed message. The details are only logged, because the API is public and database errors can contain data.
+
 | Method & path | Purpose | Success | Errors |
 |---|---|---|---|
 | `GET /available-slots?date=YYYY-MM-DD` | Slots for a day with availability | `200 { date, slots: [{ startTime: "09:00", available: true }] }` | `400` bad/out-of-window date |
