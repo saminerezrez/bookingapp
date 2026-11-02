@@ -9,5 +9,14 @@ export type BookingRow = {
 export type CreateBookingInput = {
   name: string;
   date: string;
-  start_time: string;
+  startTime: string;
+};
+
+export type Booking = CreateBookingInput & {
+  id: string;
+};
+
+export type Slot = {
+  startTime: string;
+  available: boolean;
 };
