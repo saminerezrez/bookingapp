@@ -1,5 +1,6 @@
 import fastify from "fastify";
 import type { FastifyError } from "fastify";
+import cors from "@fastify/cors";
 import routes from "./http/routes";
 import { config } from "./config";
 
@@ -38,6 +39,11 @@ export function buildApp() {
         code: "NOT_FOUND",
       },
     });
+  });
+
+  // An array, because a plain string is sent to every origin.
+  httpServer.register(cors, {
+    origin: [config.corsOrigin],
   });
 
   httpServer.register(routes);

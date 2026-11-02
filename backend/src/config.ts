@@ -13,6 +13,6 @@ export const config = {
   host: process.env.HOST ?? "0.0.0.0",
   databaseUrl: required("DATABASE_URL"),
   appVersion: process.env.APP_VERSION ?? "dev",
-  corsOrigin: process.env.CORS_ORIGIN ?? "http://localhost:5173",
+  corsOrigin: required("CORS_ORIGIN"),
   logLevel: process.env.LOG_LEVEL ?? "info",
 };

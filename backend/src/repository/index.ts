@@ -1,35 +1,52 @@
-import { sql } from "bun";
-import type { BookingRow, CreateBookingInput } from "./types";
+import { SQL, sql } from "bun";
+import { ApiError } from "../errors";
+import type { Booking, BookingListItem, CreateBookingInput } from "./types";
 
-export async function getBookings(): Promise<BookingRow[]> {
+const UNIQUE_VIOLATION = "23505";
+
+export async function getBookings(): Promise<BookingListItem[]> {
   const rows = await sql`
-    SELECT *
+    SELECT
+      id,
+      to_char(date, 'YYYY-MM-DD') AS date,
+      to_char(start_time, 'HH24:MI') AS "startTime"
     FROM bookings
     ORDER BY date, start_time
   `;
 
-  return rows as BookingRow[];
+  return rows as BookingListItem[];
 }
 
 export async function createBooking(
   booking: CreateBookingInput,
-): Promise<BookingRow> {
-  const rows = await sql`
-    INSERT INTO bookings (name, date, start_time)
-    VALUES (${booking.name}, ${booking.date}, ${booking.start_time})
-    RETURNING *
-  `;
+): Promise<Booking> {
+  try {
+    const rows = await sql`
+      INSERT INTO bookings (name, date, start_time)
+      VALUES (${booking.name}, ${booking.date}, ${booking.startTime})
+      RETURNING
+        id,
+        name,
+        to_char(date, 'YYYY-MM-DD') AS date,
+        to_char(start_time, 'HH24:MI') AS "startTime"
+    `;
 
-  return rows[0] as BookingRow;
+    return rows[0] as Booking;
+  } catch (error) {
+    if (error instanceof SQL.PostgresError && error.errno === UNIQUE_VIOLATION) {
+      throw new ApiError(409, "SLOT_TAKEN", "Slot is already booked");
+    }
+
+    throw error;
+  }
 }
 
 export async function getBookedTimes(date: string): Promise<string[]> {
   const rows = (await sql`
-    SELECT start_time
+    SELECT to_char(start_time, 'HH24:MI') AS "startTime"
     FROM bookings
     WHERE date = ${date}
-    ORDER BY start_time
-  `) as { start_time: string }[];
+  `) as { startTime: string }[];
 
-  return rows.map((row) => row.start_time);
+  return rows.map((row) => row.startTime);
 }
