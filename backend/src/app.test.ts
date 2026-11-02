@@ -19,6 +19,51 @@ describe("GET /version", () => {
   });
 });
 
+describe("Booking API", () => {
+  test("returns 400 for invalid booking data", async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/bookings",
+      payload: {
+        name: "",
+        date: "2026-11-03",
+        start_time: "11:00",
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: {
+        message: "Invalid booking data",
+        code: "INVALID_BOOKING",
+      },
+    });
+
+    await app.close();
+  });
+
+  test("returns 400 when date is missing for available slots", async () => {
+    const app = buildApp();
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/available-slots",
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toEqual({
+      error: {
+        message: "Date is required",
+        code: "INVALID_DATE",
+      },
+    });
+
+    await app.close();
+  });
+});
+
 describe("error format", () => {
   test("unknown routes use the shared format", async () => {
     const app = buildApp();
@@ -51,13 +96,16 @@ describe("error format", () => {
     });
 
     expect(response.statusCode).toBe(400);
-    expect(response.json().error.code).toBe("FST_ERR_CTP_INVALID_JSON_BODY");
+    expect(response.json().error.code).toBe(
+      "FST_ERR_CTP_INVALID_JSON_BODY",
+    );
 
     await app.close();
   });
 
   test("unexpected errors hide their details from the client", async () => {
     const app = buildApp();
+
     app.get("/boom", async () => {
       throw new Error("secret SQL details");
     });
