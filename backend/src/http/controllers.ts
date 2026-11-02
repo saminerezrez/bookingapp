@@ -15,6 +15,7 @@ export async function healthReady(req: FastifyRequest, res: FastifyReply) {
 
     return res.status(200).send({
       status: "ok",
+      version: config.appVersion,
     });
   } catch {
     return res.status(503).send({

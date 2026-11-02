@@ -1,10 +1,11 @@
 import fastify from "fastify";
 import type { FastifyError } from "fastify";
 import routes from "./http/routes";
+import { config } from "./config";
 
 export function buildApp() {
   const httpServer = fastify({
-    logger: true,
+    logger: { level: config.logLevel },
   });
 
   httpServer.setErrorHandler((error: FastifyError, request, reply) => {
@@ -12,10 +13,29 @@ export function buildApp() {
 
     const statusCode = error.statusCode ?? 500;
 
+    // Unexpected errors can contain SQL details, so they never reach the client.
+    if (statusCode >= 500) {
+      return reply.code(statusCode).send({
+        error: {
+          message: "Internal server error",
+          code: "INTERNAL_ERROR",
+        },
+      });
+    }
+
     return reply.code(statusCode).send({
       error: {
         message: error.message,
-        code: error.code ?? "INTERNAL_ERROR",
+        code: error.code ?? "BAD_REQUEST",
+      },
+    });
+  });
+
+  httpServer.setNotFoundHandler((request, reply) => {
+    return reply.code(404).send({
+      error: {
+        message: "Route not found",
+        code: "NOT_FOUND",
       },
     });
   });
