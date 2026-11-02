@@ -1,16 +1,11 @@
-import fastify from "fastify";
-import routes from "./http/routes";
+import { buildApp } from "./app";
+import { config } from "./config";
 
-const httpServer = fastify();
-
-await httpServer.register(routes);
-
-const port = Number(process.env.PORT ?? 3000);
-const host = process.env.HOST ?? "localhost";
+const httpServer = buildApp();
 
 await httpServer.listen({
-  port,
-  host,
+  port: config.port,
+  host: config.host,
 });
 
-console.log(`Server running on http://${host}:${port}`);
+console.log(`Server running on http://${config.host}:${config.port}`);
