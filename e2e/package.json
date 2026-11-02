@@ -1,0 +1,15 @@
+{
+  "name": "e2e",
+  "version": "1.0.0",
+  "description": "Playwright end-to-end test of the booking flow against the full compose stack. Added in **G13**.\r What it covers and when it runs: [ARCHITECTURE.md §8](../ARCHITECTURE.md#8-testing-strategy).\r How to run it: [README → Tests](../README.md#tests).",
+  "main": "index.js",
+  "devDependencies": {
+    "@playwright/test": "^1.64.1"
+  },
+  "scripts": {
+    "test": "playwright test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
