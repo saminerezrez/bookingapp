@@ -11,12 +11,33 @@ async function routes(httpServer: FastifyInstance) {
   httpServer.route({
     method: "POST",
     url: "/bookings",
+    schema: {
+      body: {
+        type: "object",
+        required: ["name", "date", "startTime"],
+        properties: {
+          // \S rejects names that are only whitespace.
+          name: { type: "string", minLength: 1, maxLength: 100, pattern: "\\S" },
+          date: { type: "string" },
+          startTime: { type: "string" },
+        },
+      },
+    },
     handler: controllers.createBooking,
   });
 
   httpServer.route({
     method: "GET",
     url: "/available-slots",
+    schema: {
+      querystring: {
+        type: "object",
+        required: ["date"],
+        properties: {
+          date: { type: "string" },
+        },
+      },
+    },
     handler: controllers.getAvailableSlots,
   });
 
