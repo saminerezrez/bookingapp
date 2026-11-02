@@ -1,20 +1,29 @@
 import type {
-  BookingRow,
-  CreateBookingInput,
+  Booking,
   BookingListItem,
+  CreateBookingInput,
+  Slot,
 } from "./repository/types";
 import * as repository from "./repository";
+import {
+  SLOT_TIMES,
+  isInBookingWindow,
+  isSlotInPast,
+  isSlotTime,
+  isValidDate,
+  isWeekday,
+} from "./domain/slots";
+import { ApiError } from "./errors";
 
-const bookingTimes = [
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-];
+function assertBookableDate(date: string, now: Date) {
+  if (!isValidDate(date) || !isInBookingWindow(date, now)) {
+    throw new ApiError(
+      400,
+      "INVALID_DATE",
+      "Date must be a valid date from today up to 30 days ahead",
+    );
+  }
+}
 
 export async function getBookings(): Promise<BookingListItem[]> {
   return await repository.getBookings();
@@ -22,14 +31,39 @@ export async function getBookings(): Promise<BookingListItem[]> {
 
 export async function createBooking(
   booking: CreateBookingInput,
-): Promise<BookingRow> {
-  return await repository.createBooking(booking);
+  now = new Date(),
+): Promise<Booking> {
+  assertBookableDate(booking.date, now);
+
+  if (
+    !isWeekday(booking.date) ||
+    !isSlotTime(booking.startTime) ||
+    isSlotInPast(booking.date, booking.startTime, now)
+  ) {
+    throw new ApiError(400, "INVALID_SLOT", "This time slot cannot be booked");
+  }
+
+  return await repository.createBooking({
+    ...booking,
+    name: booking.name.trim(),
+  });
 }
 
-export async function getAvailableSlots(date: string): Promise<string[]> {
+export async function getAvailableSlots(
+  date: string,
+  now = new Date(),
+): Promise<Slot[]> {
+  assertBookableDate(date, now);
+
+  if (!isWeekday(date)) {
+    return [];
+  }
+
   const bookedTimes = await repository.getBookedTimes(date);
 
-  return bookingTimes.filter(
-    (time) => !bookedTimes.some((bookedTime) => bookedTime.startsWith(time)),
-  );
+  return SLOT_TIMES.map((startTime) => ({
+    startTime,
+    available:
+      !bookedTimes.includes(startTime) && !isSlotInPast(date, startTime, now),
+  }));
 }
