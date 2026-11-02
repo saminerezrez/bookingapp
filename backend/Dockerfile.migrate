@@ -1,0 +1,5 @@
+FROM ghcr.io/amacneil/dbmate:2.37.0
+
+COPY db/migrations /db/migrations
+
+CMD ["--wait", "--no-dump-schema", "up"]
