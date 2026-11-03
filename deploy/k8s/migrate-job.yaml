@@ -1,0 +1,21 @@
+# A template, not part of kustomization.yaml. __SHA__ is replaced with the commit SHA before applying.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate-__SHA__
+  namespace: bookingapp
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 3600
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/saminerezrez/bookingapp/migrate:__SHA__
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: api
+                  key: DATABASE_URL
