@@ -82,6 +82,10 @@ flowchart LR
 
 ### Hostnames
 
+> **Changed 3/11, the teacher's decision:** the page is served from `<domain>` and only static files from
+> `cdn.<domain>`, with a CORS header on `cdn.`. The API's `CORS_ORIGIN` in production is `https://<domain>`.
+> This replaces what this section and §12 say below. The full doc rewrite follows after the presentation.
+
 | Host | Serves | Cache policy |
 |---|---|---|
 | `cdn.<domain>` | The whole frontend: `index.html` + JS/CSS/images (content-hashed file names) | `index.html`: `no-cache` · `/assets/*`: `public, max-age=31536000, immutable` |
@@ -403,6 +407,8 @@ Frontend build-time env: `VITE_API_URL`.
 ---
 
 ## 12. Decisions
+
+The "Static hosting" row below is out of date: see the note under Hostnames in §2.
 
 | Decision | Chosen | Rejected alternatives and why |
 |---|---|---|
