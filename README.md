@@ -18,6 +18,30 @@ tested, built and deployed automatically.
 **Documents:** [ROADMAP.md](ROADMAP.md) (tasks and status) · [ARCHITECTURE.md](ARCHITECTURE.md)
 (design and decisions) · [docs/RUNBOOK.md](docs/RUNBOOK.md) (what to do when something breaks)
 
+## Start
+
+Run the app (Docker Desktop must be running):
+
+```bash
+docker compose up -d --build
+```
+
+Open http://localhost:8080 and book a slot.
+
+Run the tests while the app is up (needs [Bun](https://bun.com)):
+
+```bash
+cd backend
+bun install
+bun test
+```
+
+Stop the app, from the repo root:
+
+```bash
+docker compose down
+```
+
 ---
 
 ## Contents
