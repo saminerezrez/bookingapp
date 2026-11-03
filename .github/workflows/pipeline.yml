@@ -1,0 +1,108 @@
+name: pipeline
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  DOMAIN: bokatid.xyz
+  IMAGE_PREFIX: ghcr.io/saminerezrez/bookingapp
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Backend install
+        working-directory: backend
+        run: bun install --frozen-lockfile
+      - name: Backend typecheck
+        working-directory: backend
+        run: bunx tsc --noEmit
+      - name: Backend unit and integration tests
+        working-directory: backend
+        run: bun test
+
+      - name: Frontend install
+        working-directory: frontend
+        run: npm ci
+      - name: Frontend lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Frontend typecheck and build
+        working-directory: frontend
+        run: npm run build
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: test
+    runs-on: ubuntu-latest
+    concurrency: production
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push images
+        run: |
+          docker build -t "$IMAGE_PREFIX/api:$GITHUB_SHA" --build-arg "APP_VERSION=$GITHUB_SHA" backend
+          docker build -t "$IMAGE_PREFIX/migrate:$GITHUB_SHA" -f backend/Dockerfile.migrate backend
+          docker build -t "$IMAGE_PREFIX/web:$GITHUB_SHA" \
+            --build-arg "VITE_API_URL=https://api.$DOMAIN" \
+            --build-arg "VITE_BASE_URL=https://cdn.$DOMAIN/" \
+            frontend
+          docker push "$IMAGE_PREFIX/api:$GITHUB_SHA"
+          docker push "$IMAGE_PREFIX/migrate:$GITHUB_SHA"
+          docker push "$IMAGE_PREFIX/web:$GITHUB_SHA"
+
+      - name: Set up SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Deploy over SSH
+        run: |
+          sed -i "s/newTag: dev/newTag: $GITHUB_SHA/" deploy/k8s/kustomization.yaml
+          tar -C deploy -cf - k8s deploy.sh | ssh "deploy@${{ secrets.VPS_HOST }}" 'rm -rf ~/k8s && tar -xf - -C ~'
+          ssh "deploy@${{ secrets.VPS_HOST }}" "bash ~/deploy.sh $GITHUB_SHA"
+
+      - name: Smoke test
+        run: |
+          for attempt in $(seq 1 12); do
+            version=$(curl -fsS "https://api.$DOMAIN/version" || true)
+            if [[ "$version" == *"$GITHUB_SHA"* ]]; then break; fi
+            sleep 5
+          done
+          echo "Version: $version"
+          [[ "$version" == *"$GITHUB_SHA"* ]]
+          curl -fsS "https://$DOMAIN/" | grep -q 'id="root"'
