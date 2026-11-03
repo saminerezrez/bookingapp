@@ -70,9 +70,11 @@ jobs:
 
       - name: Build and push images
         run: |
-          docker build -t "$IMAGE_PREFIX/api:$GITHUB_SHA" --build-arg "APP_VERSION=$GITHUB_SHA" backend
-          docker build -t "$IMAGE_PREFIX/migrate:$GITHUB_SHA" -f backend/Dockerfile.migrate backend
-          docker build -t "$IMAGE_PREFIX/web:$GITHUB_SHA" \
+          # The label links each package to this repo, which gives the workflow push access.
+          source_label="org.opencontainers.image.source=https://github.com/$GITHUB_REPOSITORY"
+          docker build -t "$IMAGE_PREFIX/api:$GITHUB_SHA" --label "$source_label" --build-arg "APP_VERSION=$GITHUB_SHA" backend
+          docker build -t "$IMAGE_PREFIX/migrate:$GITHUB_SHA" --label "$source_label" -f backend/Dockerfile.migrate backend
+          docker build -t "$IMAGE_PREFIX/web:$GITHUB_SHA" --label "$source_label" \
             --build-arg "VITE_API_URL=https://api.$DOMAIN" \
             --build-arg "VITE_BASE_URL=https://cdn.$DOMAIN/" \
             frontend
