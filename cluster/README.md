@@ -22,10 +22,14 @@ Ubuntu 24.04, ≥ 4 vCPU, ≥ 8 GB RAM.
 
 ```bash
 # As root: a user with SSH key login, then turn off password logins
-adduser deploy && usermod -aG sudo deploy
-# copy your public key to /home/deploy/.ssh/authorized_keys
-# in /etc/ssh/sshd_config: PasswordAuthentication no, PermitRootLogin no
-systemctl restart ssh
+adduser --disabled-password --gecos "" deploy && usermod -aG sudo deploy
+echo "deploy ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/90-deploy && chmod 440 /etc/sudoers.d/90-deploy
+install -d -m 700 -o deploy -g deploy /home/deploy/.ssh
+install -m 600 -o deploy -g deploy /root/.ssh/authorized_keys /home/deploy/.ssh/authorized_keys
+# Log in as deploy and check sudo works BEFORE the next step, or you can lock yourself out
+printf "PasswordAuthentication no\nKbdInteractiveAuthentication no\nPermitRootLogin no\n" \
+  > /etc/ssh/sshd_config.d/00-bookingapp.conf
+sshd -t && systemctl reload ssh
 
 # Firewall: only SSH and web from outside; allow k3s pod and service networks inside
 ufw allow 22/tcp && ufw allow 80/tcp && ufw allow 443/tcp
@@ -33,13 +37,15 @@ ufw allow from 10.42.0.0/16 && ufw allow from 10.43.0.0/16
 ufw enable
 
 # Automatic security updates
-apt install -y unattended-upgrades && dpkg-reconfigure -plow unattended-upgrades
+apt install -y unattended-upgrades
+printf 'APT::Periodic::Update-Package-Lists "1";\nAPT::Periodic::Unattended-Upgrade "1";\n' \
+  > /etc/apt/apt.conf.d/20auto-upgrades
 ```
 
 ## 2. k3s (G6)
 
 ```bash
-curl -sfL https://get.k3s.io | sh -
+curl -sfL https://get.k3s.io | INSTALL_K3S_VERSION="v1.36.5+k3s1" sudo sh -
 sudo kubectl get nodes                    # one node, Ready
 ```
 
@@ -47,17 +53,19 @@ k3s includes Traefik (ingress on ports 80/443), a service load balancer, `local-
 metrics-server (needed for the HPA). None of these need installing separately.
 
 To let the `deploy` user (and the pipeline over SSH) run `kubectl`, copy `/etc/rancher/k3s/k3s.yaml`
-to `~deploy/.kube/config` with mode `600`. This is the full **cluster-admin** kubeconfig, a known
-shortcut. A production setup would give the pipeline a ServiceAccount limited to the `bookingapp`
+to `~deploy/.kube/config` with mode `600`, and add `KUBECONFIG=/home/deploy/.kube/config` to
+`/etc/environment`, because k3s's `kubectl` otherwise reads the root-only file. This is the full
+**cluster-admin** kubeconfig, a known shortcut, and so is passwordless `sudo` for `deploy`, which has no password
+and logs in by key only. A production setup would give the pipeline a ServiceAccount limited to the `bookingapp`
 namespace.
 
 ## 3. cert-manager (G6)
 
 ```bash
-helm repo add jetstack https://charts.jetstack.io && helm repo update
-helm install cert-manager jetstack/cert-manager \
-  --namespace cert-manager --create-namespace --set crds.enabled=true
+kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.21.3/cert-manager.yaml
+kubectl -n cert-manager wait --for=condition=Available deployment --all --timeout=240s
 kubectl apply -f cluster/cert-manager/cluster-issuers.yaml
+kubectl create namespace bookingapp
 ```
 
 Use `letsencrypt-staging` until certificates are issued correctly, then switch the Ingresses to
