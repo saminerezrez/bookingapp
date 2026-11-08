@@ -15,6 +15,7 @@ here, so the setup can be rebuilt from scratch on a new VPS.
 | `helm/loki.yaml` | Values: single-binary mode, filesystem storage | G14 |
 | `helm/alloy.yaml` | Values: collect pod stdout and ship it to Loki | G14 |
 | `grafana/bookingapp.json` | The dashboard: request rate, errors, p95, replica count, logs | G14 |
+| `monitoring/redirect-https.yaml` | HTTP → HTTPS redirect for `grafana.<domain>` | G14 |
 
 ## 1. VPS (G6)
 
@@ -73,24 +74,52 @@ Use `letsencrypt-staging` until certificates are issued correctly, then switch t
 
 ## 4. Monitoring (G14)
 
+Install this **before** merging anything that contains `deploy/k8s/servicemonitor.yaml`. The
+ServiceMonitor type comes from this stack, so the deploy fails until it exists.
+
+Run on the VPS as `deploy`, from a checkout of the repo (`~/src/bookingapp`).
+
 ```bash
+# Helm, checked against its published checksum
+cd /tmp
+curl -fsSLO https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz
+curl -fsSLO https://get.helm.sh/helm-v3.19.0-linux-amd64.tar.gz.sha256sum
+sha256sum -c helm-v3.19.0-linux-amd64.tar.gz.sha256sum
+tar -xzf helm-v3.19.0-linux-amd64.tar.gz && sudo install linux-amd64/helm /usr/local/bin/helm
+cd ~/src/bookingapp
+
 helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
 helm repo add grafana https://grafana.github.io/helm-charts
 helm repo update
 
+# Namespace, a random Grafana admin password (never shown in the terminal or committed), and the HTTPS redirect
 kubectl create namespace monitoring
 kubectl -n monitoring create secret generic grafana-admin \
-  --from-literal=admin-user=admin --from-literal=admin-password='<strong password>'
+  --from-literal=admin-user=admin --from-literal=admin-password="$(openssl rand -base64 24)"
+kubectl apply -f cluster/monitoring/redirect-https.yaml
 
-helm install monitoring prometheus-community/kube-prometheus-stack \
-  -n monitoring -f cluster/helm/kube-prometheus-stack.yaml
-helm install loki grafana/loki -n monitoring -f cluster/helm/loki.yaml
-helm install alloy grafana/alloy -n monitoring -f cluster/helm/alloy.yaml
+# Prometheus + Grafana + kube-state-metrics + node-exporter, then Loki, then Alloy
+helm upgrade --install monitoring prometheus-community/kube-prometheus-stack --version 92.11.0 \
+  -n monitoring -f cluster/helm/kube-prometheus-stack.yaml --wait --timeout 10m
+helm upgrade --install loki grafana/loki --version 7.5.0 \
+  -n monitoring -f cluster/helm/loki.yaml --wait --timeout 10m
+helm upgrade --install alloy grafana/alloy --version 1.14.2 \
+  -n monitoring -f cluster/helm/alloy.yaml --wait --timeout 5m
+
+# The dashboard. Grafana loads every ConfigMap labelled grafana_dashboard=1
+kubectl -n monitoring create configmap bookingapp-dashboard \
+  --from-file=cluster/grafana/bookingapp.json --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n monitoring label configmap bookingapp-dashboard grafana_dashboard=1 --overwrite
 ```
 
-Then import `grafana/bookingapp.json` in Grafana, or load it through the chart's dashboard provisioning.
+Log in at `https://grafana.<domain>` as `admin`. To read the password:
 
-To upgrade any of them: the same command with `helm upgrade` instead of `helm install`.
+```bash
+kubectl -n monitoring get secret grafana-admin -o jsonpath='{.data.admin-password}' | base64 -d; echo
+```
+
+To change a setting or the dashboard, edit the file here, merge it, then run the same `helm upgrade --install`
+or `configmap` command again.
 
 ## 5. Deploy access for the pipeline (G9)
 

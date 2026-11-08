@@ -80,8 +80,11 @@ describe("error format", () => {
 });
 
 describe("GET /metrics", () => {
-  test("responds with Prometheus text", async () => {
+  test("counts requests by route pattern and status code", async () => {
     const app = buildApp();
+
+    await app.inject({ method: "GET", url: "/version" });
+    await app.inject({ method: "GET", url: "/does-not-exist" });
 
     const response = await app.inject({
       method: "GET",
@@ -89,7 +92,13 @@ describe("GET /metrics", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toContain("bookingapp_up 1");
+    expect(response.headers["content-type"]).toContain("text/plain");
+    expect(response.body).toContain(
+      'http_request_duration_seconds_count{method="GET",route="/version",status_code="200"}',
+    );
+    expect(response.body).toContain(
+      'http_request_duration_seconds_count{method="GET",route="unmatched",status_code="404"}',
+    );
 
     await app.close();
   });

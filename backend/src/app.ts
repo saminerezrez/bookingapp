@@ -3,6 +3,7 @@ import type { FastifyError } from "fastify";
 import cors from "@fastify/cors";
 import routes from "./http/routes";
 import { config } from "./config";
+import { httpRequestDuration } from "./metrics";
 
 export function buildApp() {
   const httpServer = fastify({
@@ -39,6 +40,18 @@ export function buildApp() {
         code: "NOT_FOUND",
       },
     });
+  });
+
+  // The route pattern, not the full URL, so query strings and unknown paths don't create new series.
+  httpServer.addHook("onResponse", async (request, reply) => {
+    httpRequestDuration.observe(
+      {
+        method: request.method,
+        route: request.routeOptions.url ?? "unmatched",
+        status_code: reply.statusCode,
+      },
+      reply.elapsedTime / 1000,
+    );
   });
 
   // An array, because a plain string is sent to every origin.

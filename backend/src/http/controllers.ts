@@ -2,6 +2,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { sql } from "bun";
 import * as services from "../services";
 import { config } from "../config";
+import { registry } from "../metrics";
 import type { CreateBookingInput } from "../repository/types";
 
 export async function getBookings(req: FastifyRequest, res: FastifyReply) {
@@ -53,10 +54,6 @@ export async function getVersion(req: FastifyRequest, res: FastifyReply) {
 export async function getMetrics(req: FastifyRequest, res: FastifyReply) {
   return res
     .status(200)
-    .type("text/plain")
-    .send(
-      "# HELP bookingapp_up Shows if the backend is running\n" +
-        "# TYPE bookingapp_up gauge\n" +
-        "bookingapp_up 1\n",
-    );
+    .type(registry.contentType)
+    .send(await registry.metrics());
 }

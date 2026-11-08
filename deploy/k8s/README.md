@@ -14,6 +14,7 @@ sets the image tags to the commit SHA and applies them. Design: [ARCHITECTURE.md
 | `web.yaml` | Deployment + Service `web` (nginx, 2 replicas) | G8 |
 | `ingress.yaml` | Ingresses: `cdn.<domain>` + `<domain>` → web, `api.<domain>` → api, TLS via cert-manager | G8 |
 | `migrate-job.yaml` | Template for Job `migrate-<sha>` (`dbmate --wait up`, `backoffLimit: 0`). **Not** in `kustomization.yaml`: the pipeline creates it per deploy, before the rollout | G8 |
+| `servicemonitor.yaml` | ServiceMonitor `api`: Prometheus scrapes `/metrics` on the api Service every 15s. Needs the monitoring stack ([cluster/README.md §4](../../cluster/README.md#4-monitoring-g14)) | G14 |
 | `backup-cronjob.yaml` | CronJob `db-backup`: daily 03:00 Europe/Stockholm, `pg_dump -Fc` → S3, `set -euo pipefail` | G15 |
 | `hpa.yaml` | HPA `api`: min 2, max 6, 60% CPU | VG2 |
 
