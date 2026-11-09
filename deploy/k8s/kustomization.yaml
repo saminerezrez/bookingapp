@@ -8,6 +8,7 @@ resources:
   - web.yaml
   - ingress.yaml
   - servicemonitor.yaml
+  - backup-cronjob.yaml
 images:
   - name: ghcr.io/saminerezrez/bookingapp/api
     newTag: dev

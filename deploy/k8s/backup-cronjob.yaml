@@ -1,0 +1,78 @@
+
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: postgres-daily-backup
+  namespace: bookingapp
+
+spec:
+  schedule: "0 3 * * *"
+  timeZone: "Europe/Stockholm"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          automountServiceAccountToken: false
+
+          volumes:
+            - name: backup-data
+              emptyDir: {}
+
+          initContainers:
+            - name: create-backup
+              image: postgres:16
+
+              env:
+                - name: PGHOST
+                  value: "postgres"
+                - name: PGPORT
+                  value: "5432"
+                - name: PGUSER
+                  value: "postgres"
+                - name: PGDATABASE
+                  value: "bookingapp"
+                - name: PGPASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: postgres
+                      key: POSTGRES_PASSWORD
+
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  pg_dump -Fc -f /backup/bookingapp.dump
+                  pg_restore -l /backup/bookingapp.dump > /dev/null
+
+              volumeMounts:
+                - name: backup-data
+                  mountPath: /backup
+
+          containers:
+            - name: upload-to-s3
+              image: public.ecr.aws/aws-cli/aws-cli:latest
+
+              envFrom:
+                - secretRef:
+                    name: backup-s3
+
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  timestamp="$(date -u +%Y%m%d-%H%M%S)"
+                  aws s3 cp /backup/bookingapp.dump \
+                    "s3://${S3_BUCKET}/postgres/bookingapp-${timestamp}.dump" \
+                    --region "$AWS_DEFAULT_REGION" \
+                    --only-show-errors
+                  echo "Backup uploaded successfully"
+
+              volumeMounts:
+                - name: backup-data
+                  mountPath: /backup
