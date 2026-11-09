@@ -1,0 +1,58 @@
+# Chart: prometheus-community/kube-prometheus-stack 92.11.0
+# Trimmed for one small node: no Alertmanager, no alert rules, and no scraping of the k3s parts that k3s doesn't expose.
+
+alertmanager:
+  enabled: false
+defaultRules:
+  create: false
+kubeEtcd:
+  enabled: false
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    # Pick up ServiceMonitors from every namespace, not only ones labelled for this Helm release.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+grafana:
+  admin:
+    existingSecret: grafana-admin
+  grafana.ini:
+    server:
+      root_url: https://grafana.bokatid.xyz
+  ingress:
+    enabled: true
+    ingressClassName: traefik
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      traefik.ingress.kubernetes.io/router.middlewares: monitoring-redirect-https@kubernetescrd
+    hosts:
+      - grafana.bokatid.xyz
+    tls:
+      - secretName: grafana-tls
+        hosts:
+          - grafana.bokatid.xyz
+  sidecar:
+    datasources:
+      alertmanager:
+        enabled: false
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      uid: loki
+      url: http://loki:3100
