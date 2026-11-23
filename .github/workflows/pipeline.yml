@@ -54,9 +54,47 @@ jobs:
         working-directory: frontend
         run: npm run build
 
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Start the app with compose
+        run: docker compose up -d --build
+
+      # Playwright fails at random if it starts before the API and the page answer.
+      - name: Wait for the API and the frontend
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fs -o /dev/null http://localhost:3000/health/ready && curl -fs -o /dev/null http://localhost:8080/; then
+              echo "Ready after $attempt tries"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "The app did not start in time" >&2
+          exit 1
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+
+      - name: Run the e2e test
+        working-directory: e2e
+        run: npx playwright test
+
+      - name: Show container logs
+        if: failure()
+        run: docker compose logs
+
   deploy:
     if: github.event_name == 'push'
-    needs: test
+    needs: [test, e2e]
     runs-on: ubuntu-latest
     concurrency: production
     permissions:
