@@ -3,9 +3,11 @@
 This document defines how the booking app is built and run. It is the reference for implementation
 and for the oral defense. If code and this document disagree, fix one of them in the same PR.
 
-Target grade: **VG**. Scope is exactly the G and VG requirements, and nothing beyond them.
+Target grade: **G** (changed from VG after the presentation on 4/11). The G parts are implemented as
+described here. The VG sections (two or more API pods, zero-downtime deploys, autoscaling) are the
+design we planned, but are **not** implemented: the API runs as one pod, with no HPA.
 
-`<domain>` = our domain (to be decided, see [ROADMAP.md](ROADMAP.md#open-decisions)).
+`<domain>` = `bokatid.xyz`.
 
 ---
 
@@ -65,7 +67,7 @@ flowchart LR
 
   s3[(S3-compatible bucket<br/>off the VPS)]
 
-  user -- "https://cdn.domain" --> traefik
+  user -- "https://domain + https://cdn.domain" --> traefik
   user -- "https://api.domain" --> traefik
   user -- "https://grafana.domain" --> traefik
   traefik --> web
@@ -82,34 +84,32 @@ flowchart LR
 
 ### Hostnames
 
-> **Changed 3/11, the teacher's decision:** the page is served from `<domain>` and only static files from
-> `cdn.<domain>`, with a CORS header on `cdn.`. The API's `CORS_ORIGIN` in production is `https://<domain>`.
-> This replaces what this section and §12 say below. The full doc rewrite follows after the presentation.
-
 | Host | Serves | Cache policy |
 |---|---|---|
-| `cdn.<domain>` | The whole frontend: `index.html` + JS/CSS/images (content-hashed file names) | `index.html`: `no-cache` · `/assets/*`: `public, max-age=31536000, immutable` |
-| `<domain>` | Permanent redirect (301) to `https://cdn.<domain>/` | – |
-| `api.<domain>` | REST API | none |
-| `grafana.<domain>` | Grafana dashboards (login required) | none |
+| `bokatid.xyz` | The page: `index.html` (the SPA's entry point) | `no-cache` |
+| `cdn.bokatid.xyz` | Static files only: JS, CSS and images with content-hashed file names. `index.html` returns 404 here. Sends `Access-Control-Allow-Origin: https://bokatid.xyz` | `/assets/*`: `public, max-age=31536000, immutable` |
+| `api.bokatid.xyz` | REST API | none |
+| `grafana.bokatid.xyz` | Grafana dashboards (login required) | none |
 
 All are HTTPS with Let's Encrypt certificates issued by cert-manager. HTTP redirects to HTTPS.
 
-**Why the whole frontend is on `cdn.`:** the page and its assets share an origin, so no CORS header and
-no separate CDN build setting are needed. It still meets "static files are served over
-`cdn.<domain>`". There are two cache rules because a long-cached `index.html` would keep users on an
-old release after a deploy. Hashed assets can be cached forever. Both rules sit in the one nginx
-`server` block for `cdn.`.
+**Why the page is on the root domain and the files on `cdn.`:** this was the teacher's decision on 3/11.
+Visitors open the plain domain, and "static files are served over `cdn.<domain>`" is met literally.
+The frontend is built with `VITE_BASE_URL=https://cdn.bokatid.xyz/`, so `index.html` points every
+script, stylesheet and image at `cdn.`. Both hosts are served by the same `web` pods, with one nginx
+`server` block each ([frontend/nginx.conf](frontend/nginx.conf)). There are two cache rules, because a
+long-cached `index.html` would keep users on an old release after a deploy, while hashed assets can be
+cached forever.
 
 ### How a request reaches the database
 
-1. The browser opens `https://<domain>/`, gets redirected to `https://cdn.<domain>/`, and loads
-   `index.html` plus `/assets/index-<hash>.js` from the same host.
-2. The SPA calls `POST https://api.<domain>/bookings`. DNS resolves to the VPS IP.
-3. **Traefik** (k3s's built-in ingress, on ports 80/443) terminates TLS. It matches the `api.<domain>`
-   Ingress rule and load-balances round-robin across the **ready** endpoints of the `api` Service.
-   Pods that are not ready get no traffic.
-4. **Fastify** in the chosen pod checks CORS (only `https://cdn.<domain>` is allowed), validates the body
+1. The browser opens `https://bokatid.xyz/` and gets `index.html`, which loads
+   `https://cdn.bokatid.xyz/assets/index-<hash>.js` and the CSS from `cdn.`.
+2. The SPA calls `POST https://api.bokatid.xyz/bookings`. DNS resolves to the VPS IP.
+3. **Traefik** (k3s's built-in ingress, on ports 80/443) terminates TLS. It matches the `api.bokatid.xyz`
+   Ingress rule and sends the request to a **ready** endpoint of the `api` Service. A pod that is not
+   ready gets no traffic.
+4. **Fastify** in the pod checks CORS (only `https://bokatid.xyz` is allowed), validates the body
    against a JSON schema (400 on failure), then runs controller → service (business rules) →
    repository (SQL).
 5. The repository runs a single `INSERT` against **Postgres** through `Bun.sql`'s connection pool.
@@ -346,15 +346,17 @@ Integration tests truncate tables between tests. They never run against the prod
   request rate, error rate (5xx), p95 latency, API replica count, and a logs panel (Loki).
 
 ### Backups
-- `CronJob db-backup` runs daily at 03:00 Europe/Stockholm: `pg_dump -Fc`, then uploads to an
-  **S3-compatible bucket outside the VPS**. A backup on the same disk doesn't survive losing the VPS.
-- The bucket is in an **EU region**, because dumps contain booker names (personal data under GDPR).
-  The bucket is private, and the backup credentials can only write to that one bucket.
-- The backup script runs with `set -euo pipefail`, so a failed `pg_dump` **or** a failed upload marks
-  the Job as failed (visible in `kubectl get jobs`) instead of looking like a success.
-- Retention: 14 days, set as a bucket lifecycle rule.
+- `CronJob postgres-daily-backup` runs daily at 03:00 Europe/Stockholm: `pg_dump -Fc`, checked with
+  `pg_restore -l`, then uploaded to an **AWS S3 bucket outside the VPS**. A backup on the same disk
+  doesn't survive losing the VPS.
+- The bucket is **private** and in **eu-north-1 (Stockholm)**, inside the EU, because dumps contain
+  booker names (personal data under GDPR). The backup key should only be allowed to upload to that one
+  bucket, and old dumps should be deleted by a lifecycle rule. Both are set in the bucket owner's AWS
+  account, not in this repo, and haven't been verified yet.
+- Both steps run with `sh -e`, so a failed `pg_dump` **or** a failed upload marks the Job as failed
+  (visible in `kubectl get jobs`) instead of looking like a success.
 - **A backup isn't trusted until a restore has been tested.** The restore procedure is in
-  `docs/RUNBOOK.md` and is rehearsed once into a scratch database before the defense.
+  `docs/RUNBOOK.md`, and a restore into a scratch database has been done (logged there).
 
 ### When something goes wrong
 `docs/RUNBOOK.md` has four entries: a bad deploy (roll back), a crash-looping pod, the DB is down, and
@@ -408,13 +410,11 @@ Frontend build-time env: `VITE_API_URL`.
 
 ## 12. Decisions
 
-The "Static hosting" row below is out of date: see the note under Hostnames in §2.
-
 | Decision | Chosen | Rejected alternatives and why |
 |---|---|---|
 | Orchestration | k3s on one node | Docker compose: no rolling updates/HPA, so it can't reach VG. Managed k8s: the exam requires our own VPS |
 | Double-booking protection | DB unique constraint | Check-then-insert: race condition across pods. App-level locks: don't work across pods |
-| Static hosting | Whole frontend on `cdn.<domain>`, `<domain>` redirects there | Page on `<domain>` + assets on `cdn.`: needs a CORS header and a CDN build setting for the same requirement. External CDN: another provider |
+| Static hosting | Page on `<domain>`, static files on `cdn.<domain>` (teacher's decision, 3/11), both from the same nginx pods | Whole frontend on `cdn.` with `<domain>` redirecting: simpler (no CORS header), but the teacher wanted the page on the root domain. External CDN: another provider |
 | Deploy access | SSH from Actions → `kubectl` on the VPS | Exposing port 6443 to GitHub's IP ranges: larger attack surface |
 | Image tags | Git SHA | `latest`: can't tell what's running, and rollback is ambiguous |
 | Observability | Self-hosted kube-prometheus-stack + Loki + Grafana | Grafana Cloud: less load on the VPS, but the exam says everything runs on our VPS. **Asked the teacher:** if an external service is allowed, we switch, and a 4 GB VPS is enough |

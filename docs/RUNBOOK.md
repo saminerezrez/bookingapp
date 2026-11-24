@@ -3,16 +3,12 @@
 What to do when something goes wrong in production. Every procedure follows the same pattern:
 **symptoms → check → fix → afterwards.**
 
-> **Status: v1.** The commands match the planned setup in [ARCHITECTURE.md](../ARCHITECTURE.md) and
-> [deploy/k8s/README.md](../deploy/k8s/README.md). Each procedure is checked against the real cluster in
-> G15, and the restore (§4) is rehearsed for real before the defense.
-
-All commands run on the VPS (or anywhere with kubeconfig access). The app lives in namespace `bookingapp`.
+All commands run on the VPS (`ssh deploy@bokatid.xyz`). The app lives in namespace `bookingapp`.
 
 | Shortcut | |
 |---|---|
-| Dashboard | https://grafana.&lt;domain&gt; |
-| Running version | `curl https://api.<domain>/version` |
+| Dashboard | https://grafana.bokatid.xyz |
+| Running version | `curl https://api.bokatid.xyz/version` |
 | Pod overview | `kubectl -n bookingapp get pods -o wide` |
 | Recent events | `kubectl -n bookingapp get events --sort-by=.lastTimestamp \| tail -20` |
 
@@ -27,7 +23,7 @@ All commands run on the VPS (or anywhere with kubeconfig access). The app lives 
 
 **Check**
 ```bash
-curl https://api.<domain>/version                       # which SHA is live?
+curl https://api.bokatid.xyz/version                    # which SHA is live?
 kubectl -n bookingapp rollout history deployment/api
 kubectl -n bookingapp logs -l app=api --prefix --since=10m | grep '"level":50'   # pino errors, all api pods
 ```
@@ -36,7 +32,7 @@ kubectl -n bookingapp logs -l app=api --prefix --since=10m | grep '"level":50'  
 ```bash
 kubectl -n bookingapp rollout undo deployment/api
 kubectl -n bookingapp rollout status deployment/api
-curl https://api.<domain>/version                       # should show the previous SHA
+curl https://api.bokatid.xyz/version                    # should show the previous SHA
 ```
 The same works for the frontend with `deployment/web`.
 
@@ -66,7 +62,7 @@ kubectl -n bookingapp logs <pod> --previous       # logs from the crashed contai
 |---|---|---|
 | A startup log naming a missing variable | `config.ts` fails fast on a missing env var | Fix the Secret or env (see [deploy/k8s/README.md](../deploy/k8s/README.md#secrets)), then `kubectl -n bookingapp rollout restart deployment/api` |
 | `Reason: OOMKilled` | The memory limit is too low | Raise the limit in `deploy/k8s/api.yaml` and merge |
-| `ImagePullBackOff` / `ErrImagePull` | The `ghcr-pull` secret is wrong or its PAT expired | Recreate `ghcr-pull` with a valid PAT |
+| `ImagePullBackOff` / `ErrImagePull` | The image tag doesn't exist in GHCR (the build step failed), or the package was made private | Check the pipeline's build step and that the GHCR packages are public |
 | A DB connection error on startup | The database is down | See §3 |
 | Only the new pods crash | A bad release | See §1 |
 
@@ -78,7 +74,7 @@ happen again silently.
 ## 3. The database is down
 
 **Symptoms**
-- `https://api.<domain>/health/ready` returns `503`
+- `https://api.bokatid.xyz/health/ready` returns `503`
 - All API pods are `0/1 READY`, so Traefik has no endpoints and the API returns `503`/`502`
 - Logs are full of connection errors
 
@@ -107,14 +103,20 @@ because there's no liveness probe that could fail on the DB.
 
 ## 4. Restore from backup
 
-Dumps are in the S3 bucket as `bookingapp-YYYY-MM-DD.dump` (`pg_dump -Fc` format), one per day for 14 days.
+Dumps are in the S3 bucket as `postgres/bookingapp-YYYYMMDD-HHMMSS.dump` (UTC time, `pg_dump -Fc` format),
+one per night.
 
 **Always restore into a scratch database first** and check it before touching production.
 
+Downloading needs your own AWS login with read access to the bucket. The key in the `backup-s3` Secret
+is for the CronJob, which only needs to upload.
+
 ```bash
-# 1. Find and download the dump (the S3 values are in the backup-s3 Secret)
-aws s3 ls s3://<bucket>/ --endpoint-url <s3-endpoint>
-aws s3 cp s3://<bucket>/bookingapp-<date>.dump ./restore.dump --endpoint-url <s3-endpoint>
+# 1. Find and download the newest dump (on your own machine, logged in to AWS)
+aws s3 ls s3://<bucket>/postgres/
+aws s3 cp s3://<bucket>/postgres/bookingapp-<timestamp>.dump ./restore.dump
+scp ./restore.dump deploy@bokatid.xyz:~/restore.dump
+# Then, on the VPS (ssh deploy@bokatid.xyz), from ~:
 
 # 2. Copy it into the Postgres pod
 kubectl -n bookingapp cp ./restore.dump postgres-0:/tmp/restore.dump
@@ -128,16 +130,16 @@ kubectl -n bookingapp exec postgres-0 -- psql -U postgres -d bookingapp_restore 
 If the count and the latest booking look right, restore into production:
 
 ```bash
-# 4. Stop the API so nothing writes during the restore (with 0 replicas the HPA pauses)
+# 4. Stop the API so nothing writes during the restore
 kubectl -n bookingapp scale deployment/api --replicas=0
 
 # 5. Replace production data with the dump
 kubectl -n bookingapp exec postgres-0 -- pg_restore -U postgres -d bookingapp --clean --if-exists --no-owner /tmp/restore.dump
 
 # 6. Start the API again and verify
-kubectl -n bookingapp scale deployment/api --replicas=2
+kubectl -n bookingapp scale deployment/api --replicas=1
 kubectl -n bookingapp rollout status deployment/api
-curl "https://api.<domain>/available-slots?date=<a weekday>"
+curl "https://api.bokatid.xyz/available-slots?date=<a weekday>"
 
 # 7. Clean up
 kubectl -n bookingapp exec postgres-0 -- dropdb -U postgres bookingapp_restore
@@ -147,8 +149,8 @@ rm ./restore.dump
 
 **Data loss:** anything booked after the dump (at most about 24 hours) is lost. Note the time window.
 
-**Restore test log** (filled in during G15)
+**Restore test log**
 
 | Date | Dump | Rows restored | Matches production? | By |
 |---|---|---|---|---|
-| | | | | |
+| Nov 2026 | A daily dump from S3, restored into a separate PostgreSQL container | 9 bookings | Yes | Sofie |
