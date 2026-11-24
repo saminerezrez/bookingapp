@@ -124,5 +124,6 @@ or `configmap` command again.
 ## 5. Deploy access for the pipeline (G9)
 
 - Generate an SSH key pair for the pipeline. Add the public key to `~deploy/.ssh/authorized_keys` on the VPS.
-- In GitHub → Settings → Secrets: `DEPLOY_SSH_KEY` (private key), `DEPLOY_HOST` (VPS address).
+- In GitHub → Settings → Secrets: `DEPLOY_SSH_KEY` (private key), `VPS_HOST` (VPS address) and
+  `DEPLOY_KNOWN_HOSTS` (the output of `ssh-keyscan <VPS address>`, so the pipeline can trust the server).
 - The Kubernetes API (port 6443) stays closed in the firewall. The pipeline runs `kubectl` on the VPS over SSH.

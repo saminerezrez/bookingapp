@@ -1,7 +1,7 @@
 # Roadmap
 
-Target grade: **VG**. Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
-**Scope:** only what the G and VG requirements need. No features beyond that.
+Target grade: **G** (changed from VG after the presentation on 4/11). Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
+**Scope:** only what the G requirements need. The VG tasks below are kept as the plan, but are not done.
 
 **Deadlines** (said by the teacher in class 28/10, written confirmation requested):
 - **Wed 4/11, presentation:** only the **core flow** has to work: book a slot in the deployed app. VG
@@ -20,8 +20,8 @@ Target grade: **VG**. Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
 | # | Date | Task | Depends on | Done when | Status |
 |---|---|---|---|---|---|
 | G1 | 28/10 | **Agree on the docs.** Both read and approve ROADMAP + ARCHITECTURE, then merge | – | PR merged with both approvals | ✅ |
-| G2 | 28/10 | **Decisions.** Confirm the booking rules (ARCH §1) and email the teacher the questions (below) | – | Rules confirmed in ARCH §1, email sent | ⬜ |
-| G3 | 28/10 | **Buy infrastructure.** Domain, VPS (≥4 vCPU, ≥8 GB RAM, Ubuntu 24.04), S3 bucket (EU region, private, 14-day lifecycle rule). DNS A records for `<domain>`, `api.`, `cdn.`, `grafana.` → VPS IP | – | `dig api.<domain>` returns the VPS IP, and the bucket exists | ⬜ |
+| G2 | 28/10 | **Decisions.** Confirm the booking rules (ARCH §1) and email the teacher the questions (below) | – | Rules confirmed in ARCH §1, email sent | ✅ |
+| G3 | 28/10 | **Buy infrastructure.** Domain, VPS (≥4 vCPU, ≥8 GB RAM, Ubuntu 24.04), S3 bucket (EU region, private, 14-day lifecycle rule). DNS A records for `<domain>`, `api.`, `cdn.`, `grafana.` → VPS IP | – | `dig api.<domain>` returns the VPS IP, and the bucket exists | ✅ |
 | G4 | 29/10 | **Merge the backend.** Fold the `unique (date, start_time)` constraint and the name check into the first migration (ARCH §5), then merge `feature/booking-database` | G1 | On `main`, `dbmate up` creates the table, and inserting the same slot twice fails | ✅ |
 | G5 | 29/10 | **Backend base.** Split `app.ts`/`index.ts`, listen on `0.0.0.0`, `config.ts` + `backend/.env.example`, shared error format, `GET /health/ready`, `GET /version`, `bun test` set up. 15-min check that the metrics library works on Bun | G4 | One unit and one integration test (`app.inject`) pass locally; `/metrics` responds locally | ✅ |
 | G6 | 29/10 | **VPS + k3s.** SSH keys only, firewall (22/80/443), k3s, cert-manager (staging issuer → production), namespace `bookingapp` | G3 | A test Ingress on `api.<domain>` serves a valid Let's Encrypt certificate | ✅ |
@@ -31,11 +31,17 @@ Target grade: **VG**. Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
 | G10 | 30–31/10 | **API: slots + create booking.** Slot rules module, `GET /available-slots?date=`, `POST /bookings` with schema validation and `409` on a taken slot | G5 | Unit tests for weekend, hours, on-the-hour, past and 30-day window pass. Integration test: 10 concurrent POSTs for one slot → exactly one `201` | ✅ |
 | G11 | 31/10 | **API: list + CORS.** `GET /bookings` without names, CORS allows only `https://cdn.<domain>` | G10 | Integration test: the response has no `name` field, and the CORS header is present only for the allowed origin | ✅ |
 | G12 | 31/10 | **Frontend.** API client, pick a date → see free slots, book with a name, loading and error states (clear message on `409`) | G11 | The whole flow works in a browser against the local stack | ✅ |
-| G13 | 1/11 | **E2E test.** Playwright against the compose stack: pick a date, book a slot, and the slot shows as taken. Runs in the pipeline on PRs and `main` | G9, G12 | E2E runs green in a PR and in a deploy | ⬜ |
-| G14 | 1/11 | **Monitoring + dashboard.** kube-prometheus-stack (trimmed) + Loki + Alloy via Helm (values in `cluster/`), Grafana at `https://grafana.<domain>` behind a login, `/metrics` in the API, dashboard JSON in `cluster/grafana/` with 5 panels: request rate, errors, p95, replica count, logs | G9 | The dashboard shows live traffic from the production API, and API logs are searchable | ⬜ |
-| G15 | 1/11 | **Backups + operations docs.** Daily CronJob: `pg_dump` → S3 with `set -euo pipefail`. **One restore test** into a scratch DB. `docs/RUNBOOK.md` (bad deploy, crash loop, DB down, restore). README with app/api/cdn/dashboard URLs | G9, G14 | A dump is in the bucket, the restored row count matches, and every README URL works | ⬜ |
+| G13 | 1/11 | **E2E test.** Playwright against the compose stack: pick a date, book a slot, and the slot shows as taken. Runs in the pipeline on PRs and `main` | G9, G12 | E2E runs green in a PR and in a deploy | ✅ |
+| G14 | 1/11 | **Monitoring + dashboard.** kube-prometheus-stack (trimmed) + Loki + Alloy via Helm (values in `cluster/`), Grafana at `https://grafana.<domain>` behind a login, `/metrics` in the API, dashboard JSON in `cluster/grafana/` with 5 panels: request rate, errors, p95, replica count, logs | G9 | The dashboard shows live traffic from the production API, and API logs are searchable | ✅ |
+| G15 | 1/11 | **Backups + operations docs.** Daily CronJob: `pg_dump` → S3 with `set -euo pipefail`. **One restore test** into a scratch DB. `docs/RUNBOOK.md` (bad deploy, crash loop, DB down, restore). README with app/api/cdn/dashboard URLs | G9, G14 | A dump is in the bucket, the restored row count matches, and every README URL works | ✅ |
 
-**✅ All G requirements met: Sun 1/11.**
+**Domain:** `<domain>` = `bokatid.xyz`.
+
+**G9:** everything in it runs, and every merge has been deployed automatically. The one part left is
+branch protection on `main` (required checks `test` and `e2e`). Until that's on, a failing PR can
+technically be merged, so G9 stays ⬜.
+
+**✅ All G requirements met: Tue 24/11** (completion presentation passed).
 
 ## VG tasks
 
@@ -45,14 +51,14 @@ Target grade: **VG**. Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
 | VG2 | 2/11 | **Autoscaling.** CPU/memory requests + limits (`100m` CPU request), HPA min 2 / max 6 / 60% CPU | VG1 | `kubectl get hpa` shows a current CPU %, not `<unknown>` | ⬜ |
 | VG3 | 2/11 | **Load tests (together).** k6 `performance/steady.js` (threshold `http_req_failed == 0`) and `performance/ramp.js` (mostly `GET /available-slots`), run from a laptop. Steady load during a real merge-to-deploy, then the ramp. If the HPA doesn't scale, lower the target and run again. Write the results into `performance/README.md`, since VG is graded from the repo. Optional: link a short screen recording of each run from there | VG2 | 0 failed requests during the deploy, replicas go 2 → N → 2, no pods `Pending`, results committed | ⬜ |
 
-**✅ All VG requirements met: Mon 2/11.** If it slips, VG can still land before the code submission (5–7/11).
+**VG is out of scope** since the scope changed to G. None of these tasks are done.
 
 ## Defense and submission
 
 | # | Date | Task | Depends on | Done when | Status |
 |---|---|---|---|---|---|
-| D1 | 3/11 | **Full rehearsal.** Demo the core flow on the deployed app. Each of us explains the *other's* parts: request → DB, merge → deploy, tests, technical choices, backups/restore, what we do when things break, and how VG works. **Freeze at 18:00** | G9, G12 | Booking works on the deployed app, and both of us can answer every point in the exam checklist below | ⬜ |
-| D2 | 4/11 | **Presentation** | D1 | – | ⬜ |
+| D1 | 3/11 | **Full rehearsal.** Demo the core flow on the deployed app. Each of us explains the *other's* parts: request → DB, merge → deploy, tests, technical choices, backups/restore, what we do when things break, and how VG works. **Freeze at 18:00** | G9, G12 | Booking works on the deployed app, and both of us can answer every point in the exam checklist below | ✅ |
+| D2 | 4/11 | **Presentation.** Completion presentation on 24/11 for VPS, SSL, E2E, Grafana and backups | D1 | Passed | ✅ |
 | D3 | 5–8/11 | **Final fixes + submission.** Fix what came up at the presentation, finish anything left (VG included), check the README URLs, submit the repo link | D2 | Submitted by Sun 8/11 | ⬜ |
 
 ---
@@ -71,7 +77,7 @@ Target grade: **VG**. Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
 | Requirement | How we meet it | Evidence (presentation or repo) | Tasks |
 |---|---|---|---|
 | G: API at `api.<domain>` over HTTPS | Traefik + cert-manager | Browser padlock, `curl -v` | G6, G8 |
-| G: Static files at `cdn.<domain>` | The whole frontend served by nginx on `cdn.` | DevTools: page and assets from `cdn.`, assets `immutable` | G7, G8 |
+| G: Static files at `cdn.<domain>` | Page on `<domain>`, JS/CSS/images served by nginx on `cdn.` | DevTools: assets load from `cdn.` with `immutable` | G7, G8 |
 | G: Every merge to `main` tested, built, deployed | `pipeline.yml` | Live merge, then watch the Actions run | G9 |
 | G: Unit + integration + e2e tests in the pipeline | bun test, Playwright | Actions logs, test files | G5, G10, G11, G13 |
 | G: Daily DB backups | CronJob → S3 | Bucket listing, restore test | G15 |
@@ -93,11 +99,13 @@ Target grade: **VG**. Design details: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Open decisions
 
-- [ ] Domain name → replace `<domain>` in the docs (G3)
-- [ ] VPS provider. 8 GB, or 4 GB if the teacher allows external Grafana (G3)
-- [ ] S3 provider: AWS S3 / Backblaze B2 / Cloudflare R2 (G3)
-- [ ] Booking rules: Mon–Fri 09–17, 60 min, 30 days ahead, or changed (G2)
-- [ ] Teacher's answers (G2). Draft:
+All decided:
+
+- [x] Domain name: `bokatid.xyz` (G3)
+- [x] VPS provider: Hetzner, 4 vCPU, 8 GB (G3)
+- [x] S3 provider: AWS S3 (G3)
+- [x] Booking rules: Mon–Fri 09–17, 60 min, 30 days ahead (G2)
+- [x] Teacher's answers (G2). The page goes on `<domain>` and only static files on `cdn.`. Draft of the questions:
   > "Fyra frågor om VG/driften: (1) Räcker k3s på en enda VPS-nod med 2+ pods bakom load balancern
   > för VG, eller förväntas flera noder? (2) Får metrics/logging ligga hos en extern tjänst som
   > Grafana Cloud, eller ska även det köras på vår VPS? (3) Räcker det att hela frontenden
