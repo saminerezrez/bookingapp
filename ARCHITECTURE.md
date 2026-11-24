@@ -349,9 +349,10 @@ Integration tests truncate tables between tests. They never run against the prod
 - `CronJob postgres-daily-backup` runs daily at 03:00 Europe/Stockholm: `pg_dump -Fc`, checked with
   `pg_restore -l`, then uploaded to an **AWS S3 bucket outside the VPS**. A backup on the same disk
   doesn't survive losing the VPS.
-- The bucket is **private**. Dumps contain booker names (personal data under GDPR), so the bucket
-  should be in an EU region, and the backup key should only be allowed to upload to that one bucket.
-  Both are set in the bucket owner's AWS account, not in this repo.
+- The bucket is **private** and in **eu-north-1 (Stockholm)**, inside the EU, because dumps contain
+  booker names (personal data under GDPR). The backup key should only be allowed to upload to that one
+  bucket, and old dumps should be deleted by a lifecycle rule. Both are set in the bucket owner's AWS
+  account, not in this repo, and haven't been verified yet.
 - Both steps run with `sh -e`, so a failed `pg_dump` **or** a failed upload marks the Job as failed
   (visible in `kubectl get jobs`) instead of looking like a success.
 - **A backup isn't trusted until a restore has been tested.** The restore procedure is in

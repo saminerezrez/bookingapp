@@ -327,7 +327,8 @@ Install steps and values: [cluster/README.md §4](cluster/README.md#4-monitoring
 
 - **What:** CronJob `postgres-daily-backup` ([deploy/k8s/backup-cronjob.yaml](deploy/k8s/backup-cronjob.yaml))
   makes a full `pg_dump -Fc` every day at 03:00 (Europe/Stockholm) and checks the file with `pg_restore -l`.
-- **Where:** uploaded to a private AWS S3 bucket, outside the VPS, as `postgres/bookingapp-<UTC timestamp>.dump`.
+- **Where:** uploaded to a private AWS S3 bucket in eu-north-1 (Stockholm), outside the VPS, as
+  `postgres/bookingapp-<UTC timestamp>.dump`.
 - **Failure handling:** both steps run with `sh -e` and stop on the first error, so a failed dump or
   upload shows up as a failed Job (`kubectl -n bookingapp get jobs`) instead of looking like a success.
 - **Run one now:** `kubectl -n bookingapp create job --from=cronjob/postgres-daily-backup backup-manual`

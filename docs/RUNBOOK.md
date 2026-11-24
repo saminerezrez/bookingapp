@@ -153,4 +153,4 @@ rm ./restore.dump
 
 | Date | Dump | Rows restored | Matches production? | By |
 |---|---|---|---|---|
-| Nov 2026 | A daily dump from S3 | 9 bookings | Yes | Sofie |
+| Nov 2026 | A daily dump from S3, restored into a separate PostgreSQL container | 9 bookings | Yes | Sofie |
